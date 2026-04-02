@@ -3,120 +3,170 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
-    <title>🐷 乡村小猪跑酷 3D</title>
+    <title>🐷 乡村小猪跑酷 3D - 完美视角版</title>
     <style>
         :root {
             --grass-color: #7cfc00;
             --path-color: #d2b48c;
         }
+        * { box-sizing: border-box; }
         body {
             margin: 0;
+            padding: 0;
             text-align: center;
             font-family: 'Microsoft YaHei', sans-serif;
             background: #87ceeb;
             height: 100vh;
+            width: 100vw;
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            align-items: center;
         }
 
-        /* 3D 场景容器 */
-        #game-container {
+        /* 游戏总容器：确保占满全屏 */
+        #game-window {
             position: relative;
-            width: 100vw;
-            height: 80vh;
-            perspective: 800px; /* 透视效果的关键 */
-            background: linear-gradient(#87ceeb 60%, #7cfc00 60%);
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(#87ceeb 50%, var(--grass-color) 50%);
+        }
+
+        /* 3D 视角容器 */
+        #viewport {
+            position: relative;
+            flex: 1;
+            perspective: 1000px; /* 增加透视深度 */
+            perspective-origin: 50% 30%; /* 调整视点高度 */
             overflow: hidden;
         }
 
-        /* 3D 跑道 */
+        /* 地面和跑道 */
         #world {
             position: absolute;
             width: 100%;
-            height: 100%;
+            height: 200%; /* 延伸地面 */
+            top: 20%;
+            left: 0;
             transform-style: preserve-3d;
-            transform: rotateX(60deg); /* 倾斜地面形成透视视角 */
-            bottom: -150px;
+            transform: rotateX(70deg); /* 更加平滑的角度 */
         }
 
         .road {
             position: absolute;
-            width: 300px;
-            height: 2000px;
+            width: 360px; /* 稍微加宽跑道 */
+            height: 5000px; /* 极长跑道，防止看到尽头 */
             background: var(--path-color);
             left: 50%;
             transform: translateX(-50%);
-            border-left: 10px solid #8b4513;
-            border-right: 10px solid #8b4513;
-            background-image: repeating-linear-gradient(0deg, transparent, transparent 100px, rgba(0,0,0,0.1) 105px);
+            border-left: 12px solid #8b4513;
+            border-right: 12px solid #8b4513;
+            /* 农场泥土纹理 */
+            background-image: 
+                repeating-linear-gradient(0deg, transparent, transparent 150px, rgba(139,69,19,0.1) 155px),
+                radial-gradient(circle at 50% 50%, rgba(0,0,0,0.05) 1px, transparent 1px);
+            background-size: 100% 200px, 20px 20px;
         }
 
-        /* 小猪角色 */
+        /* 小猪角色：固定在屏幕下方视觉中心 */
         #pig {
             position: absolute;
             bottom: 100px;
             left: 50%;
-            width: 60px;
-            height: 60px;
-            transform: translateX(-50%) rotateX(-60deg); /* 抵消地面旋转，保持站立 */
-            font-size: 50px;
-            transition: left 0.15s ease-out, bottom 0.2s;
+            width: 80px;
+            height: 80px;
+            transform: translateX(-50%) rotateX(-70deg); /* 抵消地面倾斜 */
+            font-size: 60px;
             z-index: 100;
-            filter: drop-shadow(0 10px 5px rgba(0,0,0,0.3));
+            transition: left 0.15s ease-out;
+            filter: drop-shadow(0 15px 10px rgba(0,0,0,0.4));
         }
 
-        /* 3D 障碍物 (猪粪便) */
+        /* 3D 障碍物 */
         .obstacle {
             position: absolute;
-            width: 40px;
-            height: 40px;
-            transform-style: preserve-3d;
-            transform: translateX(-50%) rotateX(-60deg);
-            font-size: 30px;
+            width: 50px;
+            height: 50px;
+            transform: translateX(-50%) rotateX(-70deg);
+            font-size: 40px;
             z-index: 50;
         }
-        
-        .poop-3d {
-            animation: bounce 0.5s infinite alternate;
+
+        /* UI 适配 */
+        #score-board {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 300;
+            font-size: 24px;
+            background: rgba(0,0,0,0.3);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            pointer-events: none;
         }
 
-        @keyframes bounce {
-            from { transform: translateX(-50%) rotateX(-60deg) translateY(0); }
-            to { transform: translateX(-50%) rotateX(-60deg) translateY(-10px); }
-        }
-
-        /* UI 元素 */
-        #score-board { font-size: 24px; padding: 10px; font-weight: bold; color: white; text-shadow: 1px 1px 2px #000; }
         #ui-layer {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 200;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.55);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 500;
+            backdrop-filter: blur(5px);
         }
-        .btn-start { padding: 15px 40px; font-size: 24px; background: #ffcc00; border: none; border-radius: 30px; cursor: pointer; font-weight: bold; }
+
+        .btn-start {
+            padding: 15px 50px;
+            font-size: 28px;
+            background: #ffcc00;
+            border: none;
+            border-radius: 40px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 6px #cc9900;
+        }
+
         .btn-close {
-            position: absolute; top: 15px; right: 15px; width: 40px; height: 40px;
-            background: #ff4444; color: white; border: 3px solid white; border-radius: 50%; cursor: pointer; z-index: 210; font-weight: bold;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 45px;
+            height: 45px;
+            background: #ff4444;
+            color: white;
+            border: 3px solid white;
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 600;
+            font-weight: bold;
+            font-size: 20px;
+        }
+
+        /* 手机端全屏优化 */
+        @media (max-width: 600px) {
+            .road { width: 90vw; }
+            #pig { width: 60px; height: 60px; font-size: 50px; }
         }
     </style>
 </head>
 <body>
 
-    <div id="score-board">🌻 农场得分：<span id="score">0</span></div>
-
-    <div id="game-container">
+    <div id="game-window">
+        <div id="score-board">🌾 农场积分：<span id="score">0</span></div>
         <button class="btn-close" id="closeBtn">X</button>
-        <div id="world">
-            <div class="road"></div>
+
+        <div id="viewport">
+            <div id="world">
+                <div class="road"></div>
+                </div>
             <div id="pig">🐷</div>
         </div>
 
         <div id="ui-layer">
-            <button class="btn-start" id="startBtn">进入农场</button>
+            <button class="btn-start" id="startBtn">开始奔跑</button>
         </div>
     </div>
-
-    <div style="color:white; margin-top:10px;">方向键左右移动 | 滑动手机屏幕控制</div>
 
     <script>
         const world = document.getElementById("world");
@@ -129,7 +179,18 @@
         let lane = 1;
         let score = 0;
         let isRunning = false;
-        const laneX = ["calc(50% - 100px)", "50%", "calc(50% + 100px)"];
+        
+        // 动态计算赛道位置
+        const getLaneX = () => {
+            const width = window.innerWidth > 600 ? 360 : window.innerWidth * 0.9;
+            return [
+                `calc(50% - ${width/3}px)`,
+                `50%`,
+                `calc(50% + ${width/3}px)`
+            ];
+        };
+
+        let currentLanes = getLaneX();
         let obstacles = [], timers = [];
 
         function startGame() {
@@ -138,25 +199,25 @@
             score = 0;
             lane = 1;
             scoreEl.innerText = score;
-            pig.style.left = laneX[lane];
+            currentLanes = getLaneX();
+            pig.style.left = currentLanes[lane];
             
-            // 清理旧障碍物
             obstacles.forEach(o => o.remove());
             obstacles = [];
 
-            timers.push(setInterval(spawnObstacle, 800));
-            timers.push(setInterval(update, 20));
+            timers.push(setInterval(spawnObstacle, 700));
+            timers.push(setInterval(update, 16)); // 提高到 60fps
         }
 
         function spawnObstacle() {
             if (!isRunning) return;
             const obs = document.createElement("div");
-            obs.className = "obstacle poop-3d";
+            obs.className = "obstacle";
             obs.innerHTML = "💩"; 
             const l = Math.floor(Math.random() * 3);
             obs.dataset.lane = l;
-            obs.style.left = laneX[l];
-            obs.style.top = "0px"; // 远处
+            obs.style.left = currentLanes[l];
+            obs.style.top = "0px"; 
             world.appendChild(obs);
             obstacles.push(obs);
         }
@@ -166,18 +227,18 @@
 
             obstacles.forEach((obs, i) => {
                 let top = parseFloat(obs.style.top || 0);
-                top += 12; // 移动速度
+                top += 15; // 速度
                 obs.style.top = top + "px";
 
-                // 简单的碰撞检测：当障碍物靠近底部且在同一赛道
-                if (top > 1600 && top < 1750) {
+                // 碰撞检测调整为 3D 投影后的视觉接触点
+                if (top > 2100 && top < 2350) { 
                     if (parseInt(obs.dataset.lane) === lane) {
                         endGame();
                     }
                 }
 
-                if (top > 2000) {
-                    score += 1;
+                if (top > 2600) {
+                    score += 10;
                     scoreEl.innerText = score;
                     obs.remove();
                     obstacles.splice(i, 1);
@@ -191,20 +252,20 @@
             uiLayer.style.display = "flex";
             uiLayer.innerHTML = `
                 <div style="color:white;text-align:center;">
-                    <h2 style="font-size:40px;">💥 哎呀!</h2>
-                    <p>小猪撞到了便便，得分：${score}</p>
-                    <button class="btn-start" onclick="location.reload()">再来一局</button>
+                    <h2 style="font-size:32px;">哎呀！撞到便便了</h2>
+                    <p style="font-size:20px;">本次得分：${score}</p>
+                    <button class="btn-start" onclick="location.reload()">再试一次</button>
                 </div>`;
         }
 
-        // 控制逻辑
         function move(dir) {
             if (!isRunning) return;
             if (dir === 'left') lane = Math.max(0, lane - 1);
             if (dir === 'right') lane = Math.min(2, lane + 1);
-            pig.style.left = laneX[lane];
+            pig.style.left = currentLanes[lane];
         }
 
+        // 事件监听
         window.addEventListener("keydown", e => {
             if (e.key === "ArrowLeft") move('left');
             if (e.key === "ArrowRight") move('right');
@@ -216,6 +277,11 @@
             const dx = e.changedTouches[0].clientX - startX;
             if (dx > 30) move('right');
             if (dx < -30) move('left');
+        });
+
+        window.addEventListener('resize', () => {
+            currentLanes = getLaneX();
+            pig.style.left = currentLanes[lane];
         });
 
         startBtn.onclick = startGame;
