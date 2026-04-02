@@ -1,243 +1,197 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
-    <title>🐷 乡村小猪跑酷 3D - 终极视角版</title>
-    <style>
-        :root {
-            --grass-color: #7cfc00;
-            --path-color: #d2b48c;
-        }
-        * { box-sizing: border-box; }
-        body {
-            margin: 0; padding: 0;
-            background: #87ceeb;
-            height: 100vh; width: 100vw;
-            overflow: hidden;
-            display: flex; flex-direction: column;
-            font-family: 'Microsoft YaHei', sans-serif;
-        }
-
-        /* 核心游戏容器 */
-        #game-window {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(#87ceeb 40%, var(--grass-color) 40%);
-            perspective: 1200px; /* 强化透视 */
-            perspective-origin: 50% 20%; /* 关键：视点抬高 */
-        }
-
-        /* 3D 世界 */
-        #world {
-            position: absolute;
-            width: 100%; height: 100%;
-            top: 0; left: 0;
-            transform-style: preserve-3d;
-            transform: rotateX(65deg); /* 让地面平躺形成梯形 */
-            transform-origin: center bottom;
-        }
-
-        /* 跑道：下大上小的梯形感来自 rotateX */
-        .road {
-            position: absolute;
-            width: 450px; /* 电脑端宽度 */
-            height: 10000px; /* 极长 */
-            background: var(--path-color);
-            left: 50%;
-            bottom: 0; /* 从底部开始生长 */
-            transform: translateX(-50%);
-            border-left: 15px solid #8b4513;
-            border-right: 15px solid #8b4513;
-            /* 跑道线条动画：模拟移动感 */
-            background-image: repeating-linear-gradient(0deg, transparent, transparent 100px, rgba(0,0,0,0.1) 105px);
-            animation: roadMove 2s linear infinite;
-        }
-
-        @keyframes roadMove {
-            from { background-position: 0 0; }
-            to { background-position: 0 1000px; }
-        }
-
-        /* 小猪：放在屏幕最下方（近端） */
-        #pig {
-            position: absolute;
-            bottom: 80px; /* 靠近玩家这一侧 */
-            left: 50%;
-            width: 80px; height: 80px;
-            font-size: 65px;
-            z-index: 1000;
-            transform: translateX(-50%) rotateX(-65deg); /* 抵消倾斜，正对玩家 */
-            transition: left 0.1s ease-out;
-            filter: drop-shadow(0 20px 10px rgba(0,0,0,0.4));
-        }
-
-        /* 障碍物：从远方出现 */
-        .obstacle {
-            position: absolute;
-            width: 60px; height: 60px;
-            font-size: 45px;
-            z-index: 500;
-            transform: translateX(-50%) rotateX(-65deg);
-            /* 初始在跑道远端 */
-            top: -2000px; 
-        }
-
-        /* UI 样式 */
-        #score-board {
-            position: absolute; top: 20px; left: 20px; z-index: 2000;
-            font-size: 24px; color: white; background: rgba(0,0,0,0.4);
-            padding: 8px 20px; border-radius: 30px;
-        }
-        #ui-layer {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.6); display: flex; justify-content: center;
-            align-items: center; z-index: 3000; backdrop-filter: blur(8px);
-        }
-        .btn-start { padding: 15px 60px; font-size: 30px; background: #ffcc00; border: none; border-radius: 50px; font-weight: bold; cursor: pointer; }
-        .btn-close {
-            position: absolute; top: 20px; right: 20px; width: 50px; height: 50px;
-            background: #ff4444; border: 3px solid white; border-radius: 50%;
-            color: white; font-size: 24px; z-index: 2000; cursor: pointer;
-        }
-
-        /* 手机适配 */
-        @media (max-width: 600px) {
-            .road { width: 90vw; }
-            #pig { width: 60px; font-size: 50px; bottom: 120px; }
-        }
-    </style>
+<meta charset="UTF-8">
+<title>🐷 小猪跑酷 3D Pro MAX</title>
+<style>
+body { margin:0; overflow:hidden; }
+#score {
+    position:absolute;
+    top:20px;
+    left:20px;
+    color:white;
+    font-size:24px;
+}
+</style>
 </head>
+
 <body>
+<div id="score">0</div>
 
-    <div id="game-window">
-        <div id="score-board">🌾 农场积分：<span id="score">0</span></div>
-        <button class="btn-close" id="closeBtn">X</button>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160/build/three.min.js"></script>
 
-        <div id="world">
-            <div class="road" id="road"></div>
-            </div>
-        <div id="pig">🐷</div>
+<script>
+/* ========= 基础 ========= */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
 
-        <div id="ui-layer">
-            <button class="btn-start" id="startBtn">开始挑战</button>
-        </div>
-    </div>
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+camera.position.set(0,5,10);
 
-    <script>
-        const world = document.getElementById("world");
-        const pig = document.getElementById("pig");
-        const scoreEl = document.getElementById("score");
-        const uiLayer = document.getElementById("ui-layer");
-        const road = document.getElementById("road");
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-        let lane = 1;
-        let score = 0;
-        let isRunning = false;
-        
-        const getLaneX = () => {
-            const rWidth = road.offsetWidth;
-            return [
-                `calc(50% - ${rWidth/3.2}px)`,
-                `50%`,
-                `calc(50% + ${rWidth/3.2}px)`
-            ];
-        };
+/* ========= 光 ========= */
+const light = new THREE.DirectionalLight(0xffffff,1);
+light.position.set(0,10,10);
+scene.add(light);
 
-        let currentLanes = getLaneX();
-        let obstacles = [], timers = [];
+/* ========= 地面 ========= */
+const groundGeo = new THREE.PlaneGeometry(10,200);
+const groundMat = new THREE.MeshStandardMaterial({color:0xd2b48c});
+const ground = new THREE.Mesh(groundGeo,groundMat);
+ground.rotation.x = -Math.PI/2;
+scene.add(ground);
 
-        function startGame() {
-            isRunning = true;
-            uiLayer.style.display = "none";
-            score = 0; lane = 1;
-            scoreEl.innerText = score;
-            currentLanes = getLaneX();
-            pig.style.left = currentLanes[lane];
-            
-            obstacles.forEach(o => o.remove());
-            obstacles = [];
-            
-            // 降低生成频率和更新频率，使动作更平滑
-            timers.push(setInterval(spawnObstacle, 1500)); // 每1.5秒一个
-            timers.push(setInterval(update, 20)); 
+/* ========= 小猪 ========= */
+const pig = new THREE.Mesh(
+    new THREE.BoxGeometry(1,1,1),
+    new THREE.MeshStandardMaterial({color:0xff99aa})
+);
+pig.position.y = 0.5;
+scene.add(pig);
+
+/* ========= 数据 ========= */
+let lane = 0;
+let velocityY = 0;
+let isJumping = false;
+let speed = 0.2;
+let score = 0;
+
+const lanes = [-3,0,3];
+
+let obstacles = [];
+let coins = [];
+
+/* ========= 生成 ========= */
+function spawnObstacle(){
+    const o = new THREE.Mesh(
+        new THREE.BoxGeometry(1,1,1),
+        new THREE.MeshStandardMaterial({color:0x654321})
+    );
+    o.position.set(lanes[Math.floor(Math.random()*3)],0.5,-50);
+    scene.add(o);
+    obstacles.push(o);
+}
+
+function spawnCoin(){
+    const c = new THREE.Mesh(
+        new THREE.SphereGeometry(0.4,16,16),
+        new THREE.MeshStandardMaterial({color:0xffd700})
+    );
+    c.position.set(lanes[Math.floor(Math.random()*3)],1,-50);
+    scene.add(c);
+    coins.push(c);
+}
+
+/* ========= 控制 ========= */
+document.addEventListener("keydown",e=>{
+    if(e.key==="ArrowLeft") lane = Math.max(0,lane-1);
+    if(e.key==="ArrowRight") lane = Math.min(2,lane+1);
+
+    if(e.key==="ArrowUp" && !isJumping){
+        velocityY = 0.25;
+        isJumping = true;
+    }
+});
+
+/* ========= 手势 ========= */
+let sx,sy;
+document.addEventListener("touchstart",e=>{
+    sx = e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+});
+
+document.addEventListener("touchend",e=>{
+    let dx = e.changedTouches[0].clientX - sx;
+    let dy = e.changedTouches[0].clientY - sy;
+
+    if(Math.abs(dx)>Math.abs(dy)){
+        if(dx>30) lane = Math.min(2,lane+1);
+        if(dx<-30) lane = Math.max(0,lane-1);
+    }else{
+        if(dy<-30 && !isJumping){
+            velocityY = 0.25;
+            isJumping = true;
+        }
+    }
+});
+
+/* ========= 碰撞 ========= */
+function checkCollision(a,b){
+    const box1 = new THREE.Box3().setFromObject(a);
+    const box2 = new THREE.Box3().setFromObject(b);
+    return box1.intersectsBox(box2);
+}
+
+/* ========= 主循环 ========= */
+function animate(){
+    requestAnimationFrame(animate);
+
+    speed += 0.0002;
+
+    /* 移动小猪 */
+    pig.position.x += (lanes[lane]-pig.position.x)*0.2;
+
+    /* 跳跃物理 */
+    pig.position.y += velocityY;
+    velocityY -= 0.01;
+
+    if(pig.position.y <= 0.5){
+        pig.position.y = 0.5;
+        isJumping = false;
+    }
+
+    /* 摄像机跟随 */
+    camera.position.x = pig.position.x;
+    camera.position.y = pig.position.y + 4;
+    camera.lookAt(pig.position);
+
+    /* 障碍移动 */
+    obstacles.forEach((o,i)=>{
+        o.position.z += speed;
+
+        if(checkCollision(pig,o)){
+            alert("游戏结束 得分："+score);
+            location.reload();
         }
 
-        function spawnObstacle() {
-            if (!isRunning) return;
-            const obs = document.createElement("div");
-            obs.className = "obstacle";
-            obs.innerHTML = "💩"; 
-            const l = Math.floor(Math.random() * 3);
-            obs.dataset.lane = l;
-            obs.style.left = currentLanes[l];
-            obs.style.top = "0px"; // 远端
-            world.appendChild(obs);
-            obstacles.push(obs);
+        if(o.position.z>10){
+            scene.remove(o);
+            obstacles.splice(i,1);
+            score+=10;
+        }
+    });
+
+    /* 金币 */
+    coins.forEach((c,i)=>{
+        c.rotation.y += 0.1;
+        c.position.z += speed;
+
+        if(checkCollision(pig,c)){
+            scene.remove(c);
+            coins.splice(i,1);
+            score+=50;
         }
 
-        function update() {
-            if (!isRunning) return;
-
-            obstacles.forEach((obs, i) => {
-                let top = parseFloat(obs.style.top || 0);
-                top += 8; // *** 减慢速度，这里原先是15 ***
-                obs.style.top = top + "px";
-
-                // 碰撞检测逻辑：根据现在的 3D 视角，
-                // 只有当障碍物移动到跑道最下方（近端）时才会撞上小猪
-                if (top > 850 && top < 980) { 
-                    if (parseInt(obs.dataset.lane) === lane) {
-                        endGame();
-                    }
-                }
-
-                if (top > 1200) {
-                    score += 10;
-                    scoreEl.innerText = score;
-                    obs.remove();
-                    obstacles.splice(i, 1);
-                }
-            });
+        if(c.position.z>10){
+            scene.remove(c);
+            coins.splice(i,1);
         }
+    });
 
-        function endGame() {
-            isRunning = false;
-            timers.forEach(t => clearInterval(t));
-            uiLayer.style.display = "flex";
-            uiLayer.innerHTML = `
-                <div style="color:white;text-align:center;">
-                    <h2 style="font-size:32px;">挑战结束！</h2>
-                    <p style="font-size:20px;">最终得分：${score}</p>
-                    <button class="btn-start" onclick="location.reload()">重新跑一次</button>
-                </div>`;
-        }
+    document.getElementById("score").innerText = score;
 
-        // 控制逻辑
-        function move(dir) {
-            if (!isRunning) return;
-            if (dir === 'left') lane = Math.max(0, lane - 1);
-            if (dir === 'right') lane = Math.min(2, lane + 1);
-            pig.style.left = currentLanes[lane];
-        }
+    renderer.render(scene,camera);
+}
 
-        window.addEventListener("keydown", e => {
-            if (e.key === "ArrowLeft") move('left');
-            if (e.key === "ArrowRight") move('right');
-        });
+/* ========= 定时生成 ========= */
+setInterval(spawnObstacle,1200);
+setInterval(spawnCoin,800);
 
-        let startX = 0;
-        document.addEventListener("touchstart", e => startX = e.touches[0].clientX);
-        document.addEventListener("touchend", e => {
-            const dx = e.changedTouches[0].clientX - startX;
-            if (dx > 30) move('right');
-            if (dx < -30) move('left');
-        });
+animate();
+</script>
 
-        document.getElementById("startBtn").onclick = startGame;
-        document.getElementById("closeBtn").onclick = () => { if(isRunning) endGame(); };
-        window.onresize = () => { currentLanes = getLaneX(); pig.style.left = currentLanes[lane]; };
-    </script>
 </body>
 </html>
