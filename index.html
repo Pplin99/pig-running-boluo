@@ -1,195 +1,141 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-<meta charset="UTF-8">
-<title>🐷 小猪跑酷 Ultimate</title>
-<style>
-body { margin:0; overflow:hidden; }
-#score {
-    position:absolute;
-    top:20px;
-    left:20px;
-    color:white;
-    font-size:24px;
-}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🐷 小猪跑酷（完整版）</title>
+  <style>
+    body { margin:0; text-align:center; font-family:Arial; background:linear-gradient(#87ceeb,#90ee90);} 
+    #game { position:relative; width:300px; height:500px; margin:20px auto; background:#ccc; overflow:hidden; border:4px solid #333; border-radius:10px; }
+    .pig,.item,.obstacle { position:absolute; transform:translateX(-50%); font-size:30px; }
+    .pig { bottom:10px; transition:left 0.2s; }
+    button { padding:8px 16px; margin-top:10px; }
+  </style>
 </head>
-
 <body>
-<div id="score">0</div>
+  <h2>🐷 小猪跑酷（稳定版）</h2>
+  <p>得分：<span id="score">0</span></p>
+  <div id="game"></div>
+  <div id="over" style="display:none;">
+    <h3 id="final"></h3>
+    <button onclick="restart()">重新开始</button>
+  </div>
 
-<script type="module">
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js";
-import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/loaders/GLTFLoader.js";
+<script>
+const game = document.getElementById('game');
+const scoreEl = document.getElementById('score');
+const overEl = document.getElementById('over');
+const finalEl = document.getElementById('final');
 
-/* ========= 场景 ========= */
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
+let lane=1, score=0, jumping=false, gameOver=false;
+let items=[], obstacles=[];
+const lanes=['20%','50%','80%'];
 
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(innerWidth, innerHeight);
-document.body.appendChild(renderer.domElement);
+// 🐷
+const pig=document.createElement('div');
+pig.className='pig';
+pig.innerHTML='🐷';
+pig.style.left=lanes[lane];
+game.appendChild(pig);
 
-/* ========= 光 ========= */
-const light = new THREE.DirectionalLight(0xffffff,1);
-light.position.set(5,10,5);
-scene.add(light);
-
-/* ========= 地面 ========= */
-const grounds = [];
-function createGround(z){
-    const geo = new THREE.PlaneGeometry(10,50);
-    const mat = new THREE.MeshStandardMaterial({color:0xd2b48c});
-    const g = new THREE.Mesh(geo,mat);
-    g.rotation.x = -Math.PI/2;
-    g.position.z = z;
-    scene.add(g);
-    grounds.push(g);
+// 🍍
+function spawnItem(){
+  if(gameOver) return;
+  const el=document.createElement('div');
+  el.className='item'; el.innerHTML='🍍';
+  el.dataset.lane=Math.floor(Math.random()*3);
+  el.style.left=lanes[el.dataset.lane];
+  el.style.top='0%';
+  game.appendChild(el);
+  items.push(el);
 }
-for(let i=0;i<6;i++) createGround(-i*50);
 
-/* ========= 小猪（用Fox模型代替+动画） ========= */
-let pig, mixer;
-const loader = new GLTFLoader();
-
-loader.load(
-"https://threejs.org/examples/models/gltf/Fox.glb",
-gltf=>{
-    pig = gltf.scene;
-    pig.scale.set(0.02,0.02,0.02);
-    pig.position.y = 0.5;
-    scene.add(pig);
-
-    mixer = new THREE.AnimationMixer(pig);
-    const action = mixer.clipAction(gltf.animations[0]);
-    action.play();
-});
-
-/* ========= 游戏数据 ========= */
-let lane = 1;
-let velocityY = 0;
-let isJumping = false;
-let speed = 0.2;
-let score = 0;
-
-const lanes = [-3,0,3];
-let obstacles = [];
-let coins = [];
-
-/* ========= 障碍 ========= */
+// 💩
 function spawnObstacle(){
-    const geo = new THREE.BoxGeometry(1,1,1);
-    const mat = new THREE.MeshStandardMaterial({color:0x654321});
-    const o = new THREE.Mesh(geo,mat);
-    o.position.set(lanes[Math.floor(Math.random()*3)],0.5,-60);
-    scene.add(o);
-    obstacles.push(o);
+  if(gameOver) return;
+  const el=document.createElement('div');
+  el.className='obstacle'; el.innerHTML='💩';
+  el.dataset.lane=Math.floor(Math.random()*3);
+  el.style.left=lanes[el.dataset.lane];
+  el.style.top='0%';
+  game.appendChild(el);
+  obstacles.push(el);
 }
 
-/* ========= 金币 ========= */
-function spawnCoin(){
-    const geo = new THREE.TorusGeometry(0.5,0.2,8,16);
-    const mat = new THREE.MeshStandardMaterial({color:0xffd700});
-    const c = new THREE.Mesh(geo,mat);
-    c.position.set(lanes[Math.floor(Math.random()*3)],1,-60);
-    scene.add(c);
-    coins.push(c);
-}
+// 更新
+function update(){
+  if(gameOver) return;
 
-/* ========= 控制 ========= */
-document.addEventListener("keydown",e=>{
-    if(e.key==="ArrowLeft") lane=Math.max(0,lane-1);
-    if(e.key==="ArrowRight") lane=Math.min(2,lane+1);
-    if(e.key==="ArrowUp" && !isJumping){
-        velocityY=0.25;
-        isJumping=true;
+  items = items.filter(el=>{
+    let y=parseFloat(el.style.top)||0;
+    y+=2; el.style.top=y+'%';
+    if(y>90){
+      if(parseInt(el.dataset.lane)===lane){
+        score++; scoreEl.innerText=score;
+      }
+      el.remove();
+      return false;
     }
+    return true;
+  });
+
+  obstacles = obstacles.filter(el=>{
+    let y=parseFloat(el.style.top)||0;
+    y+=2; el.style.top=y+'%';
+    if(y>85){
+      if(parseInt(el.dataset.lane)===lane && !jumping){
+        endGame();
+      }
+      el.remove();
+      return false;
+    }
+    return true;
+  });
+}
+
+function endGame(){
+  gameOver=true;
+  overEl.style.display='block';
+  finalEl.innerText='💀 游戏结束！得分：'+score;
+}
+
+function restart(){
+  location.reload();
+}
+
+// 手势
+let startX=0,startY=0;
+
+game.addEventListener('touchstart',e=>{
+  startX=e.touches[0].clientX;
+  startY=e.touches[0].clientY;
 });
 
-/* ========= 碰撞 ========= */
-function hit(a,b){
-    return new THREE.Box3().setFromObject(a)
-        .intersectsBox(new THREE.Box3().setFromObject(b));
-}
+game.addEventListener('touchend',e=>{
+  if(gameOver) return;
+  const dx=e.changedTouches[0].clientX-startX;
+  const dy=e.changedTouches[0].clientY-startY;
 
-/* ========= 主循环 ========= */
-const clock = new THREE.Clock();
-
-function animate(){
-    requestAnimationFrame(animate);
-
-    const dt = clock.getDelta();
-    if(mixer) mixer.update(dt);
-
-    speed += 0.0003;
-
-    if(pig){
-        pig.position.x += (lanes[lane]-pig.position.x)*0.2;
-
-        pig.position.y += velocityY;
-        velocityY -= 0.01;
-
-        if(pig.position.y<=0.5){
-            pig.position.y=0.5;
-            isJumping=false;
-        }
-
-        camera.position.set(pig.position.x, pig.position.y+4, 10);
-        camera.lookAt(pig.position);
+  if(Math.abs(dx)>Math.abs(dy)){
+    if(dx>30) lane=Math.min(2,lane+1);
+    if(dx<-30) lane=Math.max(0,lane-1);
+  }else{
+    if(dy<-30 && !jumping){
+      jumping=true;
+      pig.style.bottom='120px';
+      setTimeout(()=>{
+        jumping=false;
+        pig.style.bottom='10px';
+      },500);
     }
+  }
+  pig.style.left=lanes[lane];
+});
 
-    /* 地面循环 */
-    grounds.forEach(g=>{
-        g.position.z += speed;
-        if(g.position.z>50){
-            g.position.z -= 300;
-        }
-    });
-
-    /* 障碍 */
-    obstacles.forEach((o,i)=>{
-        o.position.z += speed;
-
-        if(pig && hit(pig,o)){
-            alert("游戏结束 得分："+score);
-            location.reload();
-        }
-
-        if(o.position.z>10){
-            scene.remove(o);
-            obstacles.splice(i,1);
-            score+=10;
-        }
-    });
-
-    /* 金币 */
-    coins.forEach((c,i)=>{
-        c.rotation.y+=0.1;
-        c.position.z+=speed;
-
-        if(pig && hit(pig,c)){
-            scene.remove(c);
-            coins.splice(i,1);
-            score+=50;
-        }
-
-        if(c.position.z>10){
-            scene.remove(c);
-            coins.splice(i,1);
-        }
-    });
-
-    document.getElementById("score").innerText = score;
-
-    renderer.render(scene,camera);
-}
-
-/* ========= 生成 ========= */
+// 循环
+setInterval(spawnItem,800);
 setInterval(spawnObstacle,1200);
-setInterval(spawnCoin,800);
-
-animate();
+setInterval(update,30);
 </script>
 </body>
 </html>
