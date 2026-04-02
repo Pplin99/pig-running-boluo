@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
+    <title>🐷 小猪跑酷 Pro</title>
+    <style>
+        body {
+            margin: 0;
+            text-align: center;
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(#87ceeb, #90ee90);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #game {
+            position: relative;
+            width: 320px;
+            height: 500px;
+            margin-top: 10px;
+            background: #555; /* 深色背景代表公路 */
+            overflow: hidden;
+            border: 6px solid #333;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+        /* 跑道线 */
+        .lane-line {
+            position: absolute;
+            width: 2px;
+            height: 100%;
+            background: rgba(255,255,255,0.3);
+            top: 0;
+        }
+        .pig, .item, .obstacle {
+            position: absolute;
+            transform: translateX(-50%);
+            font-size: 35px;
+            z-index: 10;
+        }
+        .pig {
+            bottom: 20px;
+            transition: left 0.15s ease-out, bottom 0.2s;
+        }
+        /* UI 元素 */
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0,0,0,0.5);
+        }
+        .btn-start {
+            padding: 15px 40px;
+            font-size: 24px;
+            background: #ffcc00;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 4px #cc9900;
+        }
+        .btn-start:active { transform: translateY(4px); box-shadow: none; }
+        
+        .btn-close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 30px;
+            height: 30px;
+            background: rgba(255,0,0,0.7);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 110;
+            font-weight: bold;
+        }
+        #score-board {
+            font-size: 24px;
+            color: #333;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="score-board">得分：<span id="score">0</span></div>
+
+    <div id="game">
+        <div class="lane-line" style="left: 33.3%"></div>
+        <div class="lane-line" style="left: 66.6%"></div>
+        
+        <button class="btn-close" id="closeBtn">X</button>
+
+        <div id="ui-layer">
+            <button class="btn-start" id="startBtn">开始游戏</button>
+        </div>
+    </div>
+
+    <p>电脑：左右方向键 | 手机：左右滑动</p>
+
+    <script>
+        const game = document.getElementById("game");
+        const scoreEl = document.getElementById("score");
+        const uiLayer = document.getElementById("ui-layer");
+        const startBtn = document.getElementById("startBtn");
+        const closeBtn = document.getElementById("closeBtn");
+
+        let lane = 1;
+        let score = 0;
+        let jumping = false;
+        let isRunning = false;
+        const lanes = ["16.6%", "50%", "83.3%"];
+
+        let pig, items = [], obstacles = [], timers = [];
+
+        function initGame() {
+            // 清理旧元素
+            game.querySelectorAll('.pig, .item, .obstacle').forEach(el => el.remove());
+            items = [];
+            obstacles = [];
+            score = 0;
+            lane = 1;
+            scoreEl.innerText = score;
+            
+            // 生成小猪
+            pig = document.createElement("div");
+            pig.className = "pig";
+            pig.innerHTML = "🐷";
+            pig.style.left = lanes[lane];
+            game.appendChild(pig);
+        }
+
+        function startGame() {
+            isRunning = true;
+            uiLayer.style.display = "none";
+            initGame();
+            
+            // 启动定时器
+            timers.push(setInterval(spawnItem, 1000));
+            timers.push(setInterval(spawnObstacle, 1500));
+            timers.push(setInterval(update, 20));
+        }
+
+        function stopGame(isWin = false) {
+            isRunning = false;
+            timers.forEach(t => clearInterval(t));
+            timers = [];
+            uiLayer.style.display = "flex";
+            uiLayer.innerHTML = `<div style="color:white;text-align:center;">
+                <h2>${isWin ? '手动结束' : '游戏结束'}</h2>
+                <p>最终得分：${score}</p>
+                <button class="btn-start" onclick="location.reload()">重新开始</button>
+            </div>`;
+        }
+
+        function spawnItem() {
+            const el = document.createElement("div");
+            el.className = "item";
+            el.innerHTML = "🍍";
+            const l = Math.floor(Math.random() * 3);
+            el.dataset.lane = l;
+            el.style.left = lanes[l];
+            el.style.top = "-50px";
+            game.appendChild(el);
+            items.push(el);
+        }
+
+        function spawnObstacle() {
+            const el = document.createElement("div");
+            el.className = "obstacle";
+            el.innerHTML = "💩";
+            const l = Math.floor(Math.random() * 3);
+            el.dataset.lane = l;
+            el.style.left = lanes[l];
+            el.style.top = "-50px";
+            game.appendChild(el);
+            obstacles.push(el);
+        }
+
+        function update() {
+            if (!isRunning) return;
+
+            // 金币逻辑
+            items.forEach((el, i) => {
+                let y = parseFloat(el.style.top || 0);
+                y += 4; 
+                el.style.top = y + "px";
+
+                if (y > 420 && y < 480 && parseInt(el.dataset.lane) === lane) {
+                    score += 10;
+                    scoreEl.innerText = score;
+                    el.remove();
+                    items.splice(i, 1);
+                } else if (y > 500) {
+                    el.remove();
+                    items.splice(i, 1);
+                }
+            });
+
+            // 障碍逻辑
+            obstacles.forEach((el, i) => {
+                let y = parseFloat(el.style.top || 0);
+                y += 5;
+                el.style.top = y + "px";
+
+                if (y > 430 && y < 470 && parseInt(el.dataset.lane) === lane && !jumping) {
+                    stopGame();
+                } else if (y > 500) {
+                    el.remove();
+                    obstacles.splice(i, 1);
+                }
+            });
+        }
+
+        // 控制逻辑
+        function move(dir) {
+            if (!isRunning) return;
+            if (dir === 'left') lane = Math.max(0, lane - 1);
+            if (dir === 'right') lane = Math.min(2, lane + 1);
+            pig.style.left = lanes[lane];
+        }
+
+        // 键盘
+        window.addEventListener("keydown", e => {
+            if (e.key === "ArrowLeft") move('left');
+            if (e.key === "ArrowRight") move('right');
+        });
+
+        // 触摸
+        let startX = 0;
+        game.addEventListener("touchstart", e => startX = e.touches[0].clientX);
+        game.addEventListener("touchend", e => {
+            const dx = e.changedTouches[0].clientX - startX;
+            if (dx > 30) move('right');
+            if (dx < -30) move('left');
+        });
+
+        // 按钮点击
+        startBtn.addEventListener("click", startGame);
+        closeBtn.addEventListener("click", () => {
+            if(isRunning) stopGame(true);
+        });
+    </script>
+</body>
+</html>
